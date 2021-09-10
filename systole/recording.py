@@ -1,8 +1,9 @@
 # Author: Nicolas Legrand <nicolas.legrand@cfin.au.dk>
 
 import socket
+from systole.utils import heart_rate
 import time
-from struct import unpack
+from struct import pack, unpack
 from typing import Dict, List, Optional
 
 import numpy as np
@@ -165,6 +166,8 @@ class Oximeter:
         # Initialize recording with empty lists
         self.instant_rr: List[float] = []
         self.recording: List[float] = []
+        self.oxigen_levels: List[float] = []
+        self.heart_rate: List[float] = []
         self.times: List[float] = []
         self.n_channels: Optional[int] = add_channels
         self.threshold: List[float] = []
@@ -188,7 +191,7 @@ class Oximeter:
 
         return self
 
-    def add_paquet(self, value: int, window: float = 1.0):
+    def add_frame(self, value: int, oxigen_levels: float = float("nan"), heart_rate: float = float("nan"), window: float = 1.0,):
         """Read a portion of data.
 
         Parameters
@@ -211,6 +214,8 @@ class Oximeter:
 
         # Store new data
         self.recording.append(value)
+        self.oxigen_levels.append(oxigen_levels)
+        self.heart_rate.append(heart_rate)
         self.peaks.append(0)
 
         # Add 0 to the additional channels
@@ -295,6 +300,9 @@ class Oximeter:
         """
         return ((paquet[1] * 256 + paquet[2]) / 65535) * 255
 
+    def get_oxigen_levels(self, frame):
+        return frame[3] & 0x7f
+
     def find_peaks(self, **kwargs):
         """Find peaks in recorded signal.
 
@@ -362,15 +370,31 @@ class Oximeter:
         duration : int or float
             Length of the desired recording time.
         """
+        frame_nb = 0
+        oxigen_levels = float("nan")
         tstart = time.time()
+
         while time.time() - tstart < duration:
             if self.serial.inWaiting() >= 5:
                 # Store Oxi level
-                paquet = list(self.serial.read(5))
-                if self.check(paquet):
-                    self.add_paquet(value=self.get_value(paquet))
+                frame = list(self.serial.read(5))
+
+                if (frame_nb == 16):
+                    tmp = oxigen_levels
+                    oxigen_levels = self.get_oxigen_levels(frame)
+                    if oxigen_levels == 0 or oxigen_levels == 127:
+                        oxigen_levels = tmp
+
+                if self.check(frame):
+                    self.add_frame(value=self.get_value(frame),
+                                   oxigen_levels=oxigen_levels)
                 else:
                     self.setup()
+
+                frame_nb += 1
+                if frame_nb == 26:
+                    frame_nb = 0
+
         return self
 
     def readInWaiting(self, stop: bool = False):
@@ -386,7 +410,7 @@ class Oximeter:
             # Store Oxi level
             paquet = list(self.serial.read(5))
             if self.check(paquet):
-                self.add_paquet(value=self.get_value(paquet))
+                self.add_frame(value=self.get_value(paquet))
             else:
                 if stop is True:
                     raise ValueError("Synch error")
@@ -515,7 +539,7 @@ class Oximeter:
                 # Store Oxi level
                 paquet = list(self.serial.read(5))
                 if self.check(paquet):
-                    self.add_paquet(value=self.get_value(paquet))
+                    self.add_frame(value=self.get_value(paquet))
                     if any(self.peaks[-2:]):  # Peak found
                         break
                 else:
@@ -622,11 +646,11 @@ class BrainVisionExG:
         resolutions = []
         for c in range(channelCount):
             index = 12 + c * 8
-            restuple = unpack("<d", rawdata[index : index + 8])
+            restuple = unpack("<d", rawdata[index: index + 8])
             resolutions.append(restuple[0])
 
         # Extract channel names
-        channelNames = self.SplitString(rawdata[12 + 8 * channelCount :])
+        channelNames = self.SplitString(rawdata[12 + 8 * channelCount:])
 
         return (channelCount, samplingInterval, resolutions, channelNames)
 
@@ -641,20 +665,20 @@ class BrainVisionExG:
         data = []
         for i in range(points * channelCount):
             index = 12 + 4 * i
-            value = unpack("<f", rawdata[index : index + 4])
+            value = unpack("<f", rawdata[index: index + 4])
             data.append(value[0])
 
         # Extract markers
         markers = []
         index = 12 + 4 * points * channelCount
         for m in range(markerCount):
-            markersize = unpack("<L", rawdata[index : index + 4])
+            markersize = unpack("<L", rawdata[index: index + 4])
 
             ma = self.marker.copy()
             (ma["position"], ma["points"], ma["channel"]) = unpack(
-                "<LLl", rawdata[index + 4 : index + 16]
+                "<LLl", rawdata[index + 4: index + 16]
             )
-            typedesc = self.SplitString(rawdata[index + 16 : index + markersize[0]])
+            typedesc = self.SplitString(rawdata[index + 16: index + markersize[0]])
             ma["type"] = typedesc[0]
             ma["description"] = typedesc[1]
 
