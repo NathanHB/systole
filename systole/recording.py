@@ -389,8 +389,7 @@ class Oximeter:
                     self.setup()
 
                 frame_nb += 1
-                if frame_nb == 25:
-                    frame_nb = 0
+                frame_nb %= 25
 
         return self
 
