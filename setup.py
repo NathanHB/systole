@@ -14,8 +14,8 @@ MAINTAINER_EMAIL = "nicolas.legrand@cfin.au.dk"
 VERSION = "0.1.3"
 
 INSTALL_REQUIRES = [
-    "numpy>=1.17",
-    "scipy>=1.3",
+    "numpy>=1.16",
+    "scipy>=1.2",
     "pandas>=0.24",
     "matplotlib>=3.0.2",
     "seaborn>=0.9.0",

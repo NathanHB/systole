@@ -301,7 +301,7 @@ class Oximeter:
         return ((paquet[1] * 256 + paquet[2]) / 65535) * 255
 
     def get_oxigen_levels(self, frame):
-        return frame[3] & 0x7f
+        return int(frame[3] & 0x7f)
 
     def find_peaks(self, **kwargs):
         """Find peaks in recorded signal.
@@ -381,9 +381,7 @@ class Oximeter:
 
                 if (frame_nb == 16):
                     tmp = oxigen_levels
-                    oxigen_levels = self.get_oxigen_levels(frame)
-                    if oxigen_levels == 0 or oxigen_levels == 127:
-                        oxigen_levels = tmp
+                    oxigen_levels = int(self.get_oxigen_levels(frame))
 
                 if self.check(frame):
                     self.add_frame(value=self.get_value(frame),
