@@ -372,6 +372,8 @@ class Oximeter:
         """
         frame_nb = 0
         oxigen_levels = float("nan")
+        hr = float('nan')
+        msb = lsb = 0
         tstart = time.time()
 
         while time.time() - tstart < duration:
@@ -379,12 +381,19 @@ class Oximeter:
                 # Store Oxi level
                 frame = list(self.serial.read(5))
 
+                if (frame_nb == 13):
+                    msb = frame[3]
+                if (frame_nb == 14):
+                    lsb = frame[3]
+                    hr = ((msb << 7) | (lsb)) & 0x1ff
+
                 if (frame_nb == 16):
                     oxigen_levels = int(self.get_oxigen_levels(frame))
 
                 if self.check(frame):
                     self.add_frame(value=self.get_value(frame),
-                                   oxigen_levels=oxigen_levels)
+                                   oxigen_levels=oxigen_levels,
+                                   heart_rate=hr)
                 else:
                     self.setup()
 
