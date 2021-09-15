@@ -380,7 +380,6 @@ class Oximeter:
                 frame = list(self.serial.read(5))
 
                 if (frame_nb == 16):
-                    tmp = oxigen_levels
                     oxigen_levels = int(self.get_oxigen_levels(frame))
 
                 if self.check(frame):
@@ -390,7 +389,7 @@ class Oximeter:
                     self.setup()
 
                 frame_nb += 1
-                if frame_nb == 26:
+                if frame_nb == 25:
                     frame_nb = 0
 
         return self
