@@ -162,6 +162,7 @@ class Oximeter:
         self.lag = 0
         self.sfreq = sfreq
         self.dist = int(self.sfreq * 0.2)
+        self.frame_nb = 0
 
         # Initialize recording with empty lists
         self.instant_rr: List[float] = []
@@ -301,7 +302,7 @@ class Oximeter:
         return ((paquet[1] * 256 + paquet[2]) / 65535) * 255
 
     def get_oxigen_levels(self, frame):
-        return int(frame[3] & 0x7f)
+        return frame[3] & 0x7f
 
     def find_peaks(self, **kwargs):
         """Find peaks in recorded signal.
@@ -370,35 +371,42 @@ class Oximeter:
         duration : int or float
             Length of the desired recording time.
         """
-        frame_nb = 0
         oxigen_levels = float("nan")
         hr = float('nan')
         msb = lsb = 0
         tstart = time.time()
+        synched = False
 
         while time.time() - tstart < duration:
             if self.serial.inWaiting() >= 5:
                 # Store Oxi level
                 frame = list(self.serial.read(5))
 
-                if (frame_nb == 13):
-                    msb = frame[3]
-                if (frame_nb == 14):
-                    lsb = frame[3]
-                    hr = ((msb << 7) | (lsb)) & 0x1ff
-
-                if (frame_nb == 16):
-                    oxigen_levels = int(self.get_oxigen_levels(frame))
-
                 if self.check(frame):
+
+                    if (frame[1] % 2 != 0):
+                        self.frame_nb = 0
+                        synched = True
+
+                    if (synched and self.frame_nb == 21):
+                        msb = frame[3]
+
+                    if (synched and self.frame_nb == 22):
+                        lsb = frame[3]
+                        hr = ((msb << 7) | (lsb)) & 0x1ff
+
+                    if (synched and self.frame_nb == 8):
+                        oxigen_levels = self.get_oxigen_levels(frame)
+
                     self.add_frame(value=self.get_value(frame),
                                    oxigen_levels=oxigen_levels,
                                    heart_rate=hr)
-                else:
-                    self.setup()
 
-                frame_nb += 1
-                frame_nb %= 25
+                    self.frame_nb += 1
+                    self.frame_nb %= 25
+                else:
+                    print("reset")
+                    self.setup()
 
         return self
 
@@ -529,7 +537,7 @@ class Oximeter:
                 break
         if completed is False:
             raise RuntimeError("Unable to read signal from the USB port.")
-        self.read(duration=read_duration)
+        # self.read(duration=read_duration)
 
         # Remove peaks
         if clear_peaks is True:
