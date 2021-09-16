@@ -13,20 +13,23 @@ ser = serial.Serial("/dev/ttyUSB0")  # Add your USB port here
 # Open serial port, initialize and plot recording for Oximeter
 oxi = Oximeter(serial=ser, sfreq=75).setup()
 # oxi.waitBeat()
-oxi = oxi.read(duration=20)
+#oxi = oxi.read(duration=20)
 
-spo2 = oxi.oxigen_levels
-hr = oxi.heart_rate
+# oxi.save("good_data")
 
-print(f"hr: {hr}")
-print(f"spo2: {spo2}")
+print("saved")
+
+data = np.load("good_data.npy")
 
 fig, ax = plt.subplots(3)
 
-ax[0].plot(hr)
-ax[1].plot(spo2)
-ax[2].plot(oxi.recording)
+ax[0].plot(data[0], label="pleth plot")
+ax[1].plot(data[1], label="heart rate (4 beats average)")
+ax[1].plot(data[2], label="extended heart rate (8 beats average)")
+ax[2].plot(data[3], label="SpO2")
 
+for i in range(3):
+    ax[i].legend()
 # The signal can be directly plotted using built-in functions.
 # oxi.plot_recording()
 plt.show()

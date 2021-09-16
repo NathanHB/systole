@@ -163,12 +163,18 @@ class Oximeter:
         self.sfreq = sfreq
         self.dist = int(self.sfreq * 0.2)
         self.frame_nb = 0
+        self.ox_level = float("nan")
+        self.hr = float('nan')
+        self.ehr = float('nan')
+        self.msb = self.lsb = 0
+        self.mesb = self.elsb = 0
 
         # Initialize recording with empty lists
         self.instant_rr: List[float] = []
         self.recording: List[float] = []
         self.oxigen_levels: List[float] = []
         self.heart_rate: List[float] = []
+        self.extended_heart_rate: List[float] = []
         self.times: List[float] = []
         self.n_channels: Optional[int] = add_channels
         self.threshold: List[float] = []
@@ -192,7 +198,7 @@ class Oximeter:
 
         return self
 
-    def add_frame(self, value: int, oxigen_levels: float = float("nan"), heart_rate: float = float("nan"), window: float = 1.0,):
+    def add_frame(self, value: int, window: float = 1.0,):
         """Read a portion of data.
 
         Parameters
@@ -215,8 +221,9 @@ class Oximeter:
 
         # Store new data
         self.recording.append(value)
-        self.oxigen_levels.append(oxigen_levels)
-        self.heart_rate.append(heart_rate)
+        self.oxigen_levels.append(self.ox_level)
+        self.heart_rate.append(self.hr)
+        self.extended_heart_rate.append(self.ehr)
         self.peaks.append(0)
 
         # Add 0 to the additional channels
@@ -363,6 +370,30 @@ class Oximeter:
 
         return ax
 
+    def is_synched(self, frame):
+        if (frame[1] % 2 != 0):
+            self.frame_nb = 0
+            return True
+        return False
+
+    def calculate_extended_hr(self, frame):
+        if (self.frame_nb == 21):
+            self.emsb = frame[3]
+        elif (self.frame_nb == 22):
+            self.elsb = frame[3]
+            self.ehr = ((self.emsb << 7) | (self.elsb)) & 0x1ff
+
+    def calculate_hr(self, frame):
+        if (self.frame_nb == 19):
+            self.msb = frame[3]
+        elif (self.frame_nb == 20):
+            self.lsb = frame[3]
+            self.hr = ((self.msb << 7) | (self.lsb)) & 0x1ff
+
+    def calculate_ox_level(self, frame):
+        if (self.frame_nb == 8):
+            self.ox_level = frame[3] & 0x7f
+
     def read(self, duration: float):
         """Read PPG signal for some amount of time.
 
@@ -371,9 +402,7 @@ class Oximeter:
         duration : int or float
             Length of the desired recording time.
         """
-        oxigen_levels = float("nan")
-        hr = float('nan')
-        msb = lsb = 0
+
         tstart = time.time()
         synched = False
 
@@ -383,29 +412,18 @@ class Oximeter:
                 frame = list(self.serial.read(5))
 
                 if self.check(frame):
+                    synched = synched or self.is_synched(frame)
 
-                    if (frame[1] % 2 != 0):
-                        self.frame_nb = 0
-                        synched = True
+                    if (synched):
+                        self.calculate_extended_hr(frame)
+                        self.calculate_hr(frame)
+                        self.calculate_ox_level(frame)
 
-                    if (synched and self.frame_nb == 21):
-                        msb = frame[3]
-
-                    if (synched and self.frame_nb == 22):
-                        lsb = frame[3]
-                        hr = ((msb << 7) | (lsb)) & 0x1ff
-
-                    if (synched and self.frame_nb == 8):
-                        oxigen_levels = self.get_oxigen_levels(frame)
-
-                    self.add_frame(value=self.get_value(frame),
-                                   oxigen_levels=oxigen_levels,
-                                   heart_rate=hr)
+                    self.add_frame(value=self.get_value(frame))
 
                     self.frame_nb += 1
                     self.frame_nb %= 25
                 else:
-                    print("reset")
                     self.setup()
 
         return self
@@ -450,8 +468,9 @@ class Oximeter:
         If the signal is saved as a :class:`pandas.DataFrame`, the resulting data
         frame will contain the following columns:
             * `signal`
-            * `peaks`
-            * `instant_rr`
+            * `heart rate (4 beats average)`
+            * `extended heart rate (8 beats average)`
+            * `oxigen levels (SpO2)`
             * `time`
         If stim channels are provided, additional columns are appended as Channel_`i`,
         for `i` additional channels.
@@ -473,8 +492,9 @@ class Oximeter:
         # Data that should be saved
         saveList = [
             np.asarray(self.recording),
-            np.asarray(self.peaks),
-            np.asarray(self.instant_rr),
+            np.asarray(self.heart_rate),
+            np.asarray(self.extended_heart_rate),
+            np.asarray(self.oxigen_levels),
             np.asarray(self.times),
         ]
 
