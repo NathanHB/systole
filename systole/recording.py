@@ -198,7 +198,7 @@ class Oximeter:
 
         return self
 
-    def add_frame(self, value: int, window: float = 1.0, starting_time: float = float("nan")):
+    def add_frame(self, value: int, window: float = 1.0, ts: float = float("nan")):
         """Read a portion of data.
 
         Parameters
@@ -233,9 +233,9 @@ class Oximeter:
 
         # Update times vector
         if not self.times:
-            self.times = [starting_time]
+            self.times = [ts]
         else:
-            self.times.append(self.times[-1] + (len(self.times) / self.sfreq))
+            self.times.append(ts)
 
         # Update threshold
         window = int(window * self.sfreq)
@@ -420,7 +420,7 @@ class Oximeter:
                         self.calculate_hr(frame)
                         self.calculate_ox_level(frame)
 
-                    self.add_frame(value=self.get_value(frame), starting_time=ts)
+                    self.add_frame(value=self.get_value(frame), ts=ts)
 
                     self.frame_nb += 1
                     self.frame_nb %= 25
