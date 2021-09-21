@@ -235,7 +235,7 @@ class Oximeter:
         if not self.times:
             self.times = [starting_time]
         else:
-            self.times.append(self.time[-1] + (len(self.times) / self.sfreq))
+            self.times.append(self.times[-1] + (len(self.times) / self.sfreq))
 
         # Update threshold
         window = int(window * self.sfreq)
