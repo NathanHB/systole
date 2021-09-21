@@ -198,7 +198,7 @@ class Oximeter:
 
         return self
 
-    def add_frame(self, value: int, window: float = 1.0,):
+    def add_frame(self, value: int, window: float = 1.0, starting_time: float = float("nan")):
         """Read a portion of data.
 
         Parameters
@@ -233,9 +233,9 @@ class Oximeter:
 
         # Update times vector
         if not self.times:
-            self.times = [0]
+            self.times = [starting_time]
         else:
-            self.times.append(len(self.times) / self.sfreq)
+            self.times.append(self.time[-1] + (len(self.times) / self.sfreq))
 
         # Update threshold
         window = int(window * self.sfreq)
@@ -410,6 +410,7 @@ class Oximeter:
             if self.serial.inWaiting() >= 5:
                 # Store Oxi level
                 frame = list(self.serial.read(5))
+                ts = time.time()
 
                 if self.check(frame):
                     synched = synched or self.is_synched(frame)
@@ -419,7 +420,7 @@ class Oximeter:
                         self.calculate_hr(frame)
                         self.calculate_ox_level(frame)
 
-                    self.add_frame(value=self.get_value(frame))
+                    self.add_frame(value=self.get_value(frame), starting_time=ts)
 
                     self.frame_nb += 1
                     self.frame_nb %= 25
